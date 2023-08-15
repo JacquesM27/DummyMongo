@@ -1,4 +1,6 @@
 using DummyMongo.Models;
+using DummyMongo.Services;
+using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,6 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.Configure<MongoDBSettings>(builder.Configuration.GetSection("MongoDB"));
+builder.Services.AddSingleton<MongoDBService>();
 
 var app = builder.Build();
 
@@ -39,48 +44,24 @@ app.MapGet("/weatherforecast", () =>
 .WithName("GetWeatherForecast")
 .WithOpenApi();
 
-app.MapPost("/laptop", async (Laptop laptop) =>
+app.MapGet("/laptop", async (MongoDBService service) =>
 {
-    MongoClient mongoClient = new("mongodb+srv://mongo:mongo@cluster0.3pprbwh.mongodb.net/?retryWrites=true&w=majority");
-    var laptopsCollection = mongoClient.GetDatabase("devices").GetCollection<Laptop>("laptops");
-    await laptopsCollection.InsertOneAsync(laptop);
+    return await service.GetAsync();
 });
 
-app.MapGet("/laptop", () =>
+app.MapPost("/laptop", async (Laptop laptop, MongoDBService service) =>
 {
-    MongoClient mongoClient = new("mongodb+srv://mongo:mongo@cluster0.3pprbwh.mongodb.net/?retryWrites=true&w=majority");
-    var laptopsCollection = mongoClient.GetDatabase("devices").GetCollection<Laptop>("laptops");
-    var emptyFilter = Builders<Laptop>.Filter.Empty;
-    var laptops = laptopsCollection.Find(emptyFilter).ToList();
-    return laptops;
+    return await service.CreateAsync(laptop);
 });
 
-app.MapGet("/laptop/guid", (string guid) =>
+app.MapPut("/laptop/{id}", async (string id, string inputName, MongoDBService service) =>
 {
-    MongoClient mongoClient = new("mongodb+srv://mongo:mongo@cluster0.3pprbwh.mongodb.net/?retryWrites=true&w=majority");
-    var laptopsCollection = mongoClient.GetDatabase("devices").GetCollection<Laptop>("laptops");
-    var filter = Builders<Laptop>.Filter.Eq("Id", guid);
-    var laptop = laptopsCollection.Find(filter).First();
-    return laptop;
+    await service.AddToInputAsync(id, inputName);
 });
 
-app.MapPut("/laptop/input/add", (string guid, string inputName) =>
+app.MapDelete("/laptop/{id}", async (string id, MongoDBService service) =>
 {
-    MongoClient mongoClient = new("mongodb+srv://mongo:mongo@cluster0.3pprbwh.mongodb.net/?retryWrites=true&w=majority");
-    var laptopsCollection = mongoClient.GetDatabase("devices").GetCollection<Laptop>("laptops");
-    var filter = Builders<Laptop>.Filter.Eq("Id", guid);
-    UpdateDefinition<Laptop> update = Builders<Laptop>.Update.AddToSet<string>("Inputs", inputName);
-    laptopsCollection.UpdateOne(filter, update);
-    var laptop = laptopsCollection.Find(filter).First();
-    return laptop;
-});
-
-app.MapDelete("/laptop", (string guid) =>
-{
-    MongoClient mongoClient = new("mongodb+srv://mongo:mongo@cluster0.3pprbwh.mongodb.net/?retryWrites=true&w=majority");
-    var laptopsCollection = mongoClient.GetDatabase("devices").GetCollection<Laptop>("laptops");
-    var filter = Builders<Laptop>.Filter.Eq("Id", guid);
-    laptopsCollection.DeleteOne(filter);
+    await service.DeleteAsync(id);
 });
 
 app.Run();
